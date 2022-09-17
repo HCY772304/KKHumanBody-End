@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<configurator>
+  <domain name="General" spec="zcl-8.0-07-5123-08" certifiable="true">
+    <older spec="zcl-7.0-07-5123-07" certifiable="true"/>
+    <older spec="zcl6-errata-14-0129-15"/>
+    <older spec="zcl-6.0-15-02017-001"/>
+    <older spec="zcl-1.0-07-5123-03"/>
+  </domain>
+  <domain name="Lighting &amp; Occupancy" spec="l&amp;o-1.0-15-0014-04" certifiable="false"/>
+  <domain name="HA" spec="ha-1.2.1-05-3520-30" dependsOn="zcl-1.0-07-5123-03" certifiable="false">
+    <older spec="ha-1.2-05-3520-29" dependsOn="zcl-1.0-07-5123-03" certifiable="true"/>
+    <older spec="ha-1.1-05-3520-27" dependsOn="zcl-1.0-07-5123-03" certifiable="true"/>
+  </domain>
+    <cluster>
+    <name>Basic</name>
+    <domain>General</domain>
+    <description>Attributes for determining basic information about a device, setting user device information such as location, and enabling a device.</description>
+    <code>0x0000</code>
+    <define>BASIC_CLUSTER</define>
+    <client tick="false" init="true">true</client>
+    <server tick="false" init="true">true</server>
+    <attribute side="server" code="0xe005" define="IndicateMode" 		type="INT8U"       min="0x00"       max="0xFE"            writable="true" 	default="0x00" 		optional="true" >IndicateMode</attribute>
+	<attribute side="server" code="0xe006" define="Sensitivity"  		type="INT8U"       min="0x00"       max="0xFE"            writable="true"  	default="0x00"      optional="true" >Sensitivity</attribute>
+	<attribute side="server" code="0xe007" define="DelayConfiguration"  type="INT16U"      min="0x00"       max="0xFFFE"          writable="true"   default="0x00"      optional="true" >DelayConfiguration</attribute>
+	<attribute side="server" code="0xe008" define="MCUSoftVersion"      type="INT8U"       min="0x00"       max="0xFE"            writable="true"   default="0x00"      optional="true" >MCUSoftVersion</attribute>
+	<attribute side="server" code="0xe009" define="MCUHardVersion"      type="INT8U"       min="0x00"       max="0xFE"            writable="true"   default="0x00"      optional="true" >MCUHardVersion</attribute>
+	<attribute side="server" code="0x8000" define="SlightMoveSwitch"    type="INT8U"       min="0x00"       max="0xFE"            writable="true"   default="0x00"      optional="true" >SlightMoveSwitch</attribute>
+	<attribute side="server" code="0x8001" define="ExistenceSwitch"     type="INT8U"       min="0x00"       max="0xFE"            writable="true"   default="0x00"      optional="true" >ExistenceSwitch</attribute>
+  </cluster>
+  
+</configurator>
+
+
+

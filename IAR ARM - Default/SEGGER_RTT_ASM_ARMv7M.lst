@@ -1,0 +1,406 @@
+                           - SEGGER_RTT_ASM_ARMv7M -                  Page    1
+
+    1                           /*********************************************
+                                ************************
+    2                           *                   (c) SEGGER Microcontroller
+                                 GmbH                  *
+    3                           *                        The Embedded Experts 
+                                                       *
+    4                           *                           www.segger.com    
+                                                       *
+    5                           **********************************************
+                                ************************
+    6                           
+    7                           -------------------------- END-OF-HEADER
+                                 -----------------------------
+    8                           
+    9                           File    : SEGGER_RTT_ASM_ARMv7M.S
+   10                           Purpose : Assembler implementation of RTT
+                                 functions for ARMv7M
+   11                           
+   12                           Additional information:
+   13                             This module is written to be assembler-indep
+                                endent and works with
+   14                             GCC and clang (Embedded Studio) and
+                                 IAR.
+   15                           */
+   16                           
+   17                           #define SEGGER_RTT_ASM      // Used to control
+                                 processed input from header file
+   18                           #include "SEGGER_RTT.h"
+   19                           
+   20                           /*********************************************
+                                ************************
+   21                           *
+   22                           *       Defines, fixed
+   23                           *
+   24                           **********************************************
+                                ************************
+   25                           */
+   26                           
+   27                           #define _CCIAR   0
+   28                           #define _CCCLANG 1
+   29                           
+   30                           #if (defined __SES_ARM) || (defined __GNUC__)
+                                 || (defined __clang__)
+   31                             #define _CC_TYPE             _CCCLANG
+   32                             #define _PUB_SYM             .global
+   33                             #define _EXT_SYM             .extern
+   34                             #define _END                 .end
+   35                             #define _WEAK                .weak
+   36                             #define _THUMB_FUNC          .thumb_func
+   37                             #define _THUMB_CODE          .code
+                                 16
+   38                             #define _WORD                .word
+   39                             #define _SECTION(Sect, Type, AlignExp)
+                                 .section Sect ##, "ax"
+   40                             #define _ALIGN(Exp)          .align Exp
+                                 
+   41                             #define _PLACE_LITS          .ltorg
+   42                             #define _DATA_SECT_START 
+   43                             #define _C_STARTUP           _start
+   44                             #define _STACK_END           __stack_end__
+   45                             #define _RAMFUNC
+   52                           #elif defined (__IASMARM__)
+   53                             #define _CC_TYPE             _CCIAR
+   54                             #define _PUB_SYM             PUBLIC
+   55                             #define _EXT_SYM             EXTERN
+   56                             #define _END                 END
+   57                             #define _WEAK                _WEAK
+   58                             #define _THUMB_FUNC
+   59                             #define _THUMB_CODE          THUMB
+   60                             #define _WORD                DCD
+   61                             #define _SECTION(Sect, Type, AlignExp)
+                                 SECTION Sect ## : ## Type ## :REORDER:NOROOT
+                                 ## (AlignExp)
+   62                             #define _ALIGN(Exp)          alignrom Exp
+                                 
+   63                             #define _PLACE_LITS
+   64                             #define _DATA_SECT_START     DATA
+   65                             #define _C_STARTUP           __iar_program_s
+                           - SEGGER_RTT_ASM_ARMv7M -                  Page    2
+
+                                tart
+   66                             #define _STACK_END           sfe(CSTACK)
+   67                             #define _RAMFUNC             SECTION_TYPE
+                                 SHT_PROGBITS, SHF_WRITE | SHF_EXECINSTR
+   68                             //
+   69                             // .text     => Link to flash
+   70                             // .textrw   => Link to RAM
+   71                             // OtherSect => Usually link to RAM
+   72                             // NOROOT    => Allows linker to throw away
+                                 the function, if not referenced
+   73                             // Alignment is 2^x
+   74                             //
+   75                           #endif
+   76                           
+   77                           #if (_CC_TYPE == _CCIAR)
+   78                                   NAME SEGGER_RTT_ASM_ARMv7M
+   79                           #else
+   81                           #endif
+   82                           
+   83                           #if defined (RTT_USE_ASM) && (RTT_USE_ASM ==
+                                 1)
+   84                                   #define SHT_PROGBITS 0x1
+   85                           
+   86                           /*********************************************
+                                ************************
+   87                           *
+   88                           *       Public / external symbols
+   89                           *
+   90                           **********************************************
+                                ************************
+   91                           */
+   92                           
+   93                                   _EXT_SYM __aeabi_memcpy
+   94                                   _EXT_SYM __aeabi_memcpy4
+   95                                   _EXT_SYM _SEGGER_RTT
+   96                           
+   97                                   _PUB_SYM SEGGER_RTT_ASM_WriteSkipNoLoc
+                                k
+   98                           
+   99                           /*********************************************
+                                ************************
+  100                           *
+  101                           *       SEGGER_RTT_WriteSkipNoLock
+  102                           *
+  103                           *  Function description
+  104                           *    Stores a specified number of characters
+                                 in SEGGER RTT
+  105                           *    control block which is then read by the
+                                 host.
+  106                           *    SEGGER_RTT_WriteSkipNoLock does not lock
+                                 the application and
+  107                           *    skips all data, if the data does not fit
+                                 into the buffer.
+  108                           *
+  109                           *  Parameters
+  110                           *    BufferIndex  Index of "Up"-buffer to be
+                                 used (e.g. 0 for "Terminal").
+  111                           *    pBuffer      Pointer to character array.
+                                 Does not need to point to a \0 terminated
+                                 string.
+  112                           *    NumBytes     Number of bytes to be stored
+                                 in the SEGGER RTT control block.
+  113                           *                 MUST be > 0!!!
+  114                           *                 This is done for performance
+                                 reasons, so no initial check has do be
+                                 done.
+  115                           *
+  116                           *  Return value
+  117                           *    1: Data has been copied
+  118                           *    0: No space, data has not been copied
+  119                           *
+  120                           *  Notes
+  121                           *    (1) If there is not enough space in the
+                                 "Up"-buffer, all data is dropped.
+  122                           *    (2) For performance reasons this function
+                                 does not call Init()
+  123                           *        and may only be called after RTT has
+                                 been initialized.
+                           - SEGGER_RTT_ASM_ARMv7M -                  Page    3
+
+  124                           *        Either by calling SEGGER_RTT_Init()
+                                 or calling another RTT API function first.
+  125                           */
+  126                                   _SECTION(.text, CODE, 2)
+  127                                   _ALIGN(2)
+  128                                   _THUMB_FUNC
+  129                           SEGGER_RTT_ASM_WriteSkipNoLock:   // unsigned
+                                 SEGGER_RTT_WriteSkipNoLock(unsigned BufferInde
+                                x, const void* pData, unsigned NumBytes)
+                                 {
+  130                                   //
+  131                                   // Cases:
+  132                                   //   1) RdOff <= WrOff => Space until
+                                 wrap-around is sufficient
+  133                                   //   2) RdOff <= WrOff => Space after
+                                 wrap-around needed (copy in 2 chunks)
+  134                                   //   3) RdOff <  WrOff => No space in
+                                 buf
+  135                                   //   4) RdOff >  WrOff => Space is
+                                 sufficient
+  136                                   //   5) RdOff >  WrOff => No space in
+                                 buf
+  137                                   //
+  138                                   // 1) is the most common case for
+                                 large buffers and assuming that J-Link reads
+                                 the data fast enough
+  139                                   //
+  140                                   // Register usage:
+  141                                   //   R0 Temporary needed as RdOff,
+                                 <Tmp> register later on
+  142                                   //   R1 pData
+  143                                   //   R2 <NumBytes>
+  144                                   //   R3 <Tmp> register. Hold free for
+                                 subroutine calls
+  145                                   //   R4 <Rem>
+  146                                   //   R5 pRing->pBuffer
+  147                                   //   R6 pRing (Points to active struct
+                                 SEGGER_RTT_BUFFER_DOWN)
+  148                                   //   R7 WrOff
+  149                                   //
+  150    00000000 F0B4                  PUSH     {R4-R7}
+  151    00000002 00EB4003              ADD      R3,R0,R0, LSL #+1
+  152    00000006 DFF88800              LDR.W    R0,=_SEGGER_RTT               
+                                              // pRing = &_SEGGER_RTT.aUp[Buffe
+                                            rIndex];
+  153    0000000A 00EBC300              ADD      R0,R0,R3, LSL #+3
+  154    0000000E 00F11806              ADD      R6,R0,#+24
+  155    00000012 3069                  LDR      R0,[R6, #+16]                 
+                                                   // RdOff = pRing->RdOff;
+  156    00000014 F768                  LDR      R7,[R6, #+12]                 
+                                                   // WrOff = pRing->WrOff;
+  157    00000016 7568                  LDR      R5,[R6, #+4]                  
+                                                   // pRing->pBuffer
+  158    00000018 8742                  CMP      R7,R0
+  159    0000001A 32D3                  BCC.N    _CheckCase4                   
+                                                    // if (RdOff <= WrOff) {   
+                                                                          =>
+                                                   Case 1), 2) or 3)
+  160                                   //
+  161                                   // Handling for case 1, later on
+                                 identical to case 4
+  162                                   //
+  163    0000001C B368                  LDR      R3,[R6, #+8]                  
+                                                   //  Avail = pRing->SizeOfBuf
+                                                 fer - WrOff - 1u;      =>
+                                                  Space until wrap-around
+                                                  (assume 1 byte not usable for
+                                                  case that RdOff == 0)
+  164    0000001E DC1B                  SUBS     R4,R3,R7                      
+                                                   // <Rem> (Used in case we
+                                                  jump into case 2 afterwards)
+  165    00000020 631E                  SUBS     R3,R4,#+1                     
+                                                   // <Avail>
+  166    00000022 9342                  CMP      R3,R2
+  167    00000024 14D3                  BCC.N    _CheckCase2                   
+                                                    // if (Avail >= NumBytes) {
+                                                    => Case 1)?
+  168                           _Case4:
+                           - SEGGER_RTT_ASM_ARMv7M -                  Page    4
+
+  169    00000026 7D19                  ADDS     R5,R7,R5                      
+                                                   // pBuffer += WrOff
+  170    00000028 D019                  ADDS     R0,R2,R7                      
+                                                   // v = WrOff + NumBytes
+  171                                   //
+  172                                   // 2x unrolling for the copy loop that
+                                 is used most of the time
+  173                                   // This is a special optimization for
+                                 small SystemView packets and makes them even
+                                 faster
+  174                                   //
+  175    0000002A 0000                  _ALIGN(2)
+  176                           _LoopCopyStraight:                            
+                                   // memcpy(pRing->pBuffer + WrOff, pData,
+                                 NumBytes);
+  177    0000002C 11F8013B              LDRB     R3,[R1], #+1
+  178    00000030 05F8013B              STRB     R3,[R5], #+1                  
+                                                   // *pDest++ = *pSrc++
+  179    00000034 521E                  SUBS     R2,R2,#+1
+  180    00000036 05D0                  BEQ      _CSDone
+  181    00000038 11F8013B              LDRB     R3,[R1], #+1
+  182    0000003C 05F8013B              STRB     R3,[R5], #+1                  
+                                                   // *pDest++ = *pSrc++
+  183    00000040 521E                  SUBS     R2,R2,#+1
+  184    00000042 F3D1                  BNE      _LoopCopyStraight
+  185                           _CSDone:
+  186                           #if _CORE_NEEDS_DMB                           
+                                   // Do not slow down cores that do not need a
+                                 DMB instruction here
+  187    00000044 BFF35F8F              DMB                                    
+   // Cortex-M7 may delay memory writes and also change the order in which the
+  writes happen. Therefore, make sure that all buffer writes are finished,
+  before updating the <WrOff> in the struct
+  188                           #endif
+  189    00000048 F060                  STR      R0,[R6, #+12]                 
+                                                   // pRing->WrOff = WrOff +
+                                                  NumBytes;
+  190    0000004A 0120                  MOVS     R0,#+1
+  191    0000004C F0BC                  POP      {R4-R7}
+  192    0000004E 7047                  BX       LR                            
+                                                   // Return 1
+  193                           _CheckCase2:
+  194    00000050 C018                  ADDS     R0,R0,R3                      
+                                                   // Avail += RdOff; => Space
+                                                  incl. wrap-around
+  195    00000052 9042                  CMP      R0,R2
+  196    00000054 19D3                  BCC.N    _Case3                        
+                                                    // if (Avail >= NumBytes) {
+                                                             => Case 2? => If
+                                                   not, we have case 3) (does
+                                                   not fit)
+  197                                   //
+  198                                   // Handling for case 2
+  199                                   //
+  200    00000056 7819                  ADDS     R0,R7,R5                      
+                                                   // v = pRing->pBuffer +
+                                                  WrOff => Do not change
+                                                  pRing->pBuffer here because
+                                                  2nd chunk needs org.
+                                                  value
+  201    00000058 121B                  SUBS     R2,R2,R4                      
+                                                   // NumBytes -= Rem;  (Rem =
+                                                  pRing->SizeOfBuffer - WrOff;
+                                                  => Space until end of
+                                                  buffer)
+  202                           _LoopCopyBeforeWrapAround:                    
+                                   // memcpy(pRing->pBuffer + WrOff, pData,
+                                 Rem); => Copy 1st chunk
+  203    0000005A 11F8013B              LDRB     R3,[R1], #+1
+  204    0000005E 00F8013B              STRB     R3,[R0], #+1                  
+                                                   // *pDest++ = *pSrc++
+  205    00000062 641E                  SUBS     R4,R4,#+1
+  206    00000064 F9D1                  BNE      _LoopCopyBeforeWrapAround
+  207                                   //
+  208                                   // Special case: First check that
+                                 assumed RdOff == 0 calculated that last
+                                 element before wrap-around could not be
+                                 used
+                           - SEGGER_RTT_ASM_ARMv7M -                  Page    5
+
+  209                                   // But 2nd check (considering space
+                                 until wrap-around and until RdOff) revealed
+                                 that RdOff is not 0, so we can use the last
+                                 element
+  210                                   // In this case, we may use a copy
+                                 straight until buffer end anyway without
+                                 needing to copy 2 chunks
+  211                                   // Therefore, check if 2nd memcpy is
+                                 necessary at all
+  212                                   //
+  213    00000066 141C                  ADDS     R4,R2,#+0                     
+                                                   // Save <NumBytes> (needed
+                                                  as counter in loop but must
+                                                  be written to <WrOff> after
+                                                  the loop). Also use this inst
+                                                  to update the flags to skip
+                                                  2nd loop if possible
+  214    00000068 05D0                  BEQ.N    _No2ChunkNeeded               
+                                                    // if (NumBytes) {
+  215                           _LoopCopyAfterWrapAround:                     
+                                   // memcpy(pRing->pBuffer, pData + Rem,
+                                 NumBytes);
+  216    0000006A 11F8013B              LDRB     R3,[R1], #+1                  
+                                                   // pData already points to
+                                                  the next src byte due to copy
+                                                  loop increment before this
+                                                  loop
+  217    0000006E 05F8013B              STRB     R3,[R5], #+1                  
+                                                   // *pDest++ = *pSrc++
+  218    00000072 521E                  SUBS     R2,R2,#+1
+  219    00000074 F9D1                  BNE      _LoopCopyAfterWrapAround
+  220                           _No2ChunkNeeded:
+  221                           #if _CORE_NEEDS_DMB                           
+                                   // Do not slow down cores that do not need a
+                                 DMB instruction here
+  222    00000076 BFF35F8F              DMB                                    
+   // Cortex-M7 may delay memory writes and also change the order in which the
+  writes happen. Therefore, make sure that all buffer writes are finished,
+  before updating the <WrOff> in the struct
+  223                           #endif
+  224    0000007A F460                  STR      R4,[R6, #+12]                 
+                                                   // pRing->WrOff = NumBytes;
+                                                  => Must be written after
+                                                  copying data because J-Link
+                                                  may read control block
+                                                  asynchronously while writing
+                                                  into buffer
+  225    0000007C 0120                  MOVS     R0,#+1
+  226    0000007E F0BC                  POP      {R4-R7}
+  227    00000080 7047                  BX       LR                            
+                                                   // Return 1
+  228                           _CheckCase4:
+  229    00000082 C01B                  SUBS     R0,R0,R7
+  230    00000084 401E                  SUBS     R0,R0,#+1                     
+                                                   // Avail = RdOff - WrOff -
+                                                  1u;
+  231    00000086 9042                  CMP      R0,R2
+  232    00000088 CDD2                  BCS.N    _Case4                        
+                                                    // if (Avail >= NumBytes) {
+                                                        => Case 4) == 1) ? =>
+                                                   If not, we have case 5) ==
+                                                   3) (does not fit)
+  233                           _Case3:
+  234    0000008A 0020                  MOVS     R0,#+0
+  235    0000008C F0BC                  POP      {R4-R7}
+  236    0000008E 7047                  BX       LR                            
+                                                   // Return 0
+  237                                   _PLACE_LITS
+  238                           
+  239                           #endif  // defined (RTT_USE_ASM) && (RTT_USE_A
+                                SM == 1)
+  239.1                                  TABLE
+  239.2  00000090 ........              Reference on line 152
+  240                                   _END
+##############################
+#           CRC:0            #
+#        Errors:   0         #
+#        Warnings: 0         #
+#         Bytes: 148         #
+##############################
+
+
+
+

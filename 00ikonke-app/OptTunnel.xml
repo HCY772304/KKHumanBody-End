@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<configurator>
+  <domain name="General" spec="zcl-7.0-07-5123-07" certifiable="true">
+    <older spec="zcl6-errata-14-0129-15" />
+    <older spec="zcl-6.0-15-02017-001" />
+    <older spec="zcl-1.0-07-5123-03" />
+  </domain>
+  <domain name="Lighting &amp; Occupancy" spec="l&amp;o-1.0-15-0014-04" certifiable="false" />
+  <domain name="HA" spec="ha-1.2.1-05-3520-30" dependsOn="zcl-1.0-07-5123-03" certifiable="false">
+    <older spec="ha-1.2-05-3520-29" dependsOn="zcl-1.0-07-5123-03" certifiable="true"/>
+    <older spec="ha-1.1-05-3520-27" dependsOn="zcl-1.0-07-5123-03" certifiable="true"/>
+  </domain>
+  <cluster>
+    <name>OptTunnel</name>
+    <domain>General</domain>
+    <description>The private cluster of the Konke company is used for the extended use of the private protocol </description>
+    <code>0xFCC0</code>
+    <define>OPT_TUNNEL_CLUSTER</define>
+    <client tick="false" init="true">true</client>
+    <server tick="false" init="true">true</server>
+    <attribute side="server" code="0x0000" define="OPT_DATA" type="CHAR_STRING" length="254" writable="true" default="" optional="true" >OptData</attribute>
+    <attribute side="server" code="0x0001" define="TTS" type="CHAR_STRING" length="254" writable="true" default="" optional="true" >TTS</attribute>
+    <attribute side="server" code="0x0002" define="MTO_RR_RspRandom" type="INT16U" min="0x00" max="0xFFFF" writable="true" default="" optional="true" >MTO_RR_RspRandom</attribute>
+    <attribute side="server" code="0x0003" define="AssociatedAnnounce" type="CHAR_STRING" length="16" writable="true" default="" optional="true" >AssociatedAnnounce</attribute>
+    <attribute side="server" code="0x0010" define="CMEI" type="CHAR_STRING" length="32" writable="true" default="" optional="true" >CMEI</attribute>
+    <attribute side="server" code="0x0011" define="ISN" type="CHAR_STRING" length="32" writable="true" default="" optional="true" >ISN</attribute>
+    <attribute side="server" code="0x0012" define="InstallCode" type="CHAR_STRING" length="32" writable="false" default="" optional="true" >InstallCode</attribute>
+    <attribute side="server" code="0x0013" define="CHUNK_N1" type="CHAR_STRING" length="32" writable="true" default="" optional="true" >CHUNK_N1</attribute>
+  </cluster>
+  
+</configurator>
